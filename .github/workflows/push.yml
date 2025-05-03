@@ -3,7 +3,7 @@ name: Push to Replicate
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main 
     paths:
       - '**.py'
       - 'replicate.yaml'
