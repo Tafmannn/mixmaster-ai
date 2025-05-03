@@ -1,0 +1,28 @@
+build:
+  python_version: "3.10"
+  system_packages:
+    - ffmpeg
+  python_packages:
+    - torch
+    - torchvision
+    - torchaudio
+    - librosa
+    - pydub
+    - replicate
+
+predict: "predict.py:Predictor"
+
+description: "Mixmaster AI: Automatically mixes and masters hip hop tracks into radio-quality versions."
+
+inputs:
+  audio:
+    type: file
+    description: "Upload your audio file (MP3 or WAV)"
+  genre:
+    type: string
+    description: "Select the genre for mastering"
+    default: "hiphop"
+
+outputs:
+  type: file
+  description: "Mastered audio output"
