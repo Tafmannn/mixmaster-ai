@@ -1,6 +1,6 @@
 # replicate.yaml
 
-name: tafmannn/mixmaster-ai
+name: mixmaster-ai
 description: AI-powered tool for mixing and mastering music with genre-specific chains
 runtime: python
 entrypoint: python predict.py
