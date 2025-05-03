@@ -1,20 +1,40 @@
-name: mixmaster-ai
-description: AI-powered mixing and mastering tool with genre-specific DSP and stem export.
-inputs:
-  audio_file:
-    type: file
-    description: "Input audio file (.wav or .mp3). Can be a full mix or zipped stems."
-  genre:
-    type: string
-    default: "hiphop"
-    enum: ["hiphop", "edm", "pop", "rock"]
-  target_lufs:
-    type: number
-    default: -8.0
-outputs:
-  master_output:
-    type: file
-  stem_outputs:
-    type: array
-    items:
+# replicate.yaml
+
+name: tafmannn/mixmaster-ai
+description: AI-powered tool for mixing and mastering music with genre-specific chains
+runtime: python
+entrypoint: python predict.py
+
+# Define any Python packages or system dependencies you need
+# Update these to match your model's requirements
+dependencies:
+  - pip: 
+      - torch
+      - torchaudio
+      - numpy
+      - librosa
+      - scipy
+      - soundfile
+      - pydub
+      - demucs
+      - ffmpeg-python
+      - audiomentations
+
+# If your model requires any model files, include them here
+# e.g., weights, configs
+# Add them to a folder like `model/` and reference them in `predict.py`
+predict:
+  parameters:
+    audio_input:
       type: file
+      description: "Upload the unmastered audio file (WAV, MP3, etc)"
+    genre:
+      type: string
+      default: "hiphop"
+      enum: ["hiphop", "pop", "edm", "rock", "jazz"]
+      description: "Select the genre to guide the mastering chain"
+
+  outputs:
+    output_audio:
+      type: file
+      description: "The mastered audio file"
