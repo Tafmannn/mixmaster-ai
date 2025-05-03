@@ -1,54 +1,65 @@
 import os
-import subprocess
 import tempfile
 import torchaudio
-import demucs.separate
+import librosa
+import soundfile as sf
 from pydub import AudioSegment
-import pyloudnorm as pyln
+from audiomentations import Compose, Gain, Normalize, HighPassFilter, LowPassFilter
 
-GENRE_PRESETS = {
-    "hiphop": {"low_cut": 40, "high_cut": 16000, "compression_ratio": 4, "target_lufs": -8},
-    "edm": {"low_cut": 30, "high_cut": 18000, "compression_ratio": 3, "target_lufs": -6},
-    "pop": {"low_cut": 50, "high_cut": 17000, "compression_ratio": 2.5, "target_lufs": -10},
-    "rock": {"low_cut": 60, "high_cut": 15000, "compression_ratio": 5, "target_lufs": -9}
+import replicate  # for input/output support
+
+# Genre-specific mastering chains
+GENRE_CHAINS = {
+    "hiphop": Compose([
+        Gain(min_gain_db=4, max_gain_db=5),
+        Normalize(p=1.0),
+        HighPassFilter(min_cutoff_freq=40.0, max_cutoff_freq=60.0, p=1.0),
+        LowPassFilter(min_cutoff_freq=16000.0, max_cutoff_freq=18000.0, p=1.0),
+    ]),
+    "pop": Compose([
+        Gain(min_gain_db=3, max_gain_db=4),
+        Normalize(p=1.0),
+        HighPassFilter(min_cutoff_freq=80.0, max_cutoff_freq=100.0, p=1.0),
+        LowPassFilter(min_cutoff_freq=17000.0, max_cutoff_freq=18000.0, p=1.0),
+    ]),
+    "edm": Compose([
+        Gain(min_gain_db=6, max_gain_db=8),
+        Normalize(p=1.0),
+        HighPassFilter(min_cutoff_freq=30.0, max_cutoff_freq=50.0, p=1.0),
+    ]),
+    "rock": Compose([
+        Gain(min_gain_db=5, max_gain_db=6),
+        Normalize(p=1.0),
+        HighPassFilter(min_cutoff_freq=70.0, max_cutoff_freq=90.0, p=1.0),
+    ]),
+    "jazz": Compose([
+        Gain(min_gain_db=2, max_gain_db=3),
+        Normalize(p=1.0),
+        HighPassFilter(min_cutoff_freq=50.0, max_cutoff_freq=70.0, p=1.0),
+    ]),
 }
 
-def apply_dsp(stem_path, preset):
-    audio = AudioSegment.from_file(stem_path)
-    audio = audio.high_pass_filter(preset['low_cut']).low_pass_filter(preset['high_cut'])
-    temp_out = tempfile.mktemp(suffix=".wav")
-    audio.export(temp_out, format="wav")
-    return temp_out
 
-def predict(audio_file, genre="hiphop", target_lufs=-8.0):
-    preset = GENRE_PRESETS[genre]
-    work_dir = tempfile.mkdtemp()
-    audio_path = os.path.join(work_dir, "input.wav")
-    AudioSegment.from_file(audio_file).export(audio_path, format="wav")
+def load_audio(audio_path):
+    waveform, sr = torchaudio.load(audio_path)
+    return waveform[0].numpy(), sr
 
-    # Stem separation with Demucs
-    demucs_output_dir = os.path.join(work_dir, "separated")
-    subprocess.run(["python3", "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_output_dir, audio_path])
 
-    stems_dir = os.path.join(demucs_output_dir, "htdemucs", "input")
-    stem_files = []
-    for file in os.listdir(stems_dir):
-        stem_path = os.path.join(stems_dir, file)
-        processed_path = apply_dsp(stem_path, preset)
-        stem_files.append(processed_path)
+def save_audio(data, sample_rate, path):
+    sf.write(path, data, sample_rate)
 
-    # Mix stems into one track
-    final_mix = AudioSegment.silent(duration=0)
-    for f in stem_files:
-        final_mix = final_mix.overlay(AudioSegment.from_file(f))
 
-    # Loudness normalization
-    samples = final_mix.get_array_of_samples()
-    meter = pyln.Meter(final_mix.frame_rate)
-    loudness = meter.integrated_loudness(samples)
-    final_mix = final_mix + (target_lufs - loudness)
+def process_audio(audio_path, genre):
+    samples, sr = load_audio(audio_path)
+    augmenter = GENRE_CHAINS.get(genre, GENRE_CHAINS["hiphop"])
+    processed_samples = augmenter(samples=samples, sample_rate=sr)
 
-    master_output_path = os.path.join(work_dir, "final_master.wav")
-    final_mix.export(master_output_path, format="wav")
+    temp_out = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    save_audio(processed_samples, sr, temp_out.name)
+    return temp_out.name
 
-    return {"master_output": master_output_path, "stem_outputs": stem_files}
+
+# Replicate's predict function
+def predict(audio_input, genre="hiphop"):
+    output_path = process_audio(audio_input, genre)
+    return output_path
